@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lacey Store - Your Online Sari-Sari Store</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* --- LANDING PAGE SPECIFIC STYLES --- */
+    body {
+      background-color: #f8f9fa;
+      overflow-x: hidden;
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 90vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f5132 0%, #198754 60%, #20c997 100%);
+      color: white;
+      padding: 0 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Background decorative circles */
+    .hero::before, .hero::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .hero::before { width: 400px; height: 400px; top: -100px; right: -100px; }
+    .hero::after { width: 300px; height: 300px; bottom: -100px; left: -100px; }
+
+    .hero-content {
+      text-align: center;
+      max-width: 800px;
+      z-index: 1;
+      animation: fadeInUp 1s ease-out;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(5px);
+      padding: 8px 20px;
+      border-radius: 50px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 25px;
+      letter-spacing: 1px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      line-height: 1.2;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      opacity: 0.9;
+      margin-bottom: 40px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .hero-btn {
+      display: inline-block;
+      background: #fff;
+      color: #198754;
+      padding: 15px 40px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    }
+
+    .hero-btn:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+      background: #f8f9fa;
+    }
+
+    /* Features Section */
+    .features-section {
+      padding: 80px 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .section-title h2 {
+      font-size: 2.5rem;
+      color: #0f5132;
+      margin-bottom: 15px;
+    }
+
+    .section-title p {
+      color: #64748b;
+      font-size: 1.1rem;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+    }
+
+    .feature-card {
+      background: #fff;
+      padding: 40px 30px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+      border: 1px solid #e2e8f0;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+      border-color: #198754;
+    }
+
+    .feature-icon {
+      font-size: 3rem;
+      margin-bottom: 20px;
+      display: inline-block;
+      background: #e8f5e9;
+      width: 80px;
+      height: 80px;
+      line-height: 80px;
+      border-radius: 50%;
+      color: #198754;
+    }
+
+    .feature-card h3 {
+      font-size: 1.3rem;
+      color: #0f5132;
+      margin-bottom: 15px;
+    }
+
+    .feature-card p {
+      color: #64748b;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    .footer {
+      background: #0f5132;
+      color: #d1e7dd;
+      text-align: center;
+      padding: 30px 20px;
+      margin-top: 50px;
+    }
+
+    .footer p {
+      margin: 5px 0;
+      font-size: 0.9rem;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.5rem; }
+      .hero p { font-size: 1rem; }
+      .section-title h2 { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <div class="navbar">
+    <div class="logo">🛒 Lacey Store</div>
+    <nav>
+      <a href="login.html" style="background: white; color: #198754; padding: 8px 20px; border-radius: 8px; font-weight: bold; margin-left: 0;">Login</a>
+    </nav>
+  </div>
+
+  <!-- HERO SECTION -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-badge">✨ Now Serving Talangan, Nasugbu</div>
+      <h1>Your Neighborhood Sari-Sari Store — Now Online!</h1>
+      <p>Order your favorite snacks, drinks, and daily essentials from the comfort of your home. Fast delivery, fresh items, and affordable prices!</p>
+      <a href="login.html" class="hero-btn">🛍️ Shop Now</a>
+    </div>
+  </section>
+
+  <!-- FEATURES SECTION -->
+  <section class="features-section">
+    <div class="section-title">
+      <h2>Why Choose Lacey Store?</h2>
+      <p>We bring the classic sari-sari store experience to your fingertips.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📦</div>
+        <h3>Live Inventory</h3>
+        <p>Always updated stock levels. What you see on the website is exactly what we have in-store.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💳</div>
+        <h3>Easy Online Ordering</h3>
+        <p>Browse, add to cart, and check out in seconds. Pick up in-store or have it delivered to your door.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏷️</div>
+        <h3>Barcode Technology</h3>
+        <p>Lightning-fast checkout using our modern barcode scanner system for accurate and quick service.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p><b>Lacey Store</b> - Talangan, Nasugbu, Batangas</p>
+    <p>&copy; 2026 Lacey Store. All Rights Reserved.</p>
+  </footer>
+
+</body>
+</html>

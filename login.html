@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Lacey Store</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="login-body">
+
+  <div class="login-card">
+    <h2>🛒 Lacey Store</h2>
+    <p id="err" style="color:#dc3545;font-size:0.9rem;margin-bottom:15px;font-weight:600;text-align:center;"></p>
+    
+    <div class="input-group">
+      <label>Username</label>
+      <input type="text" id="user" placeholder="Enter your username">
+    </div>
+    
+    <div class="input-group">
+      <label>Password</label>
+      <div style="position: relative;">
+        <input type="password" id="pass" placeholder="Enter your password" style="padding-right: 40px;">
+        <span onclick="togglePassword()" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-size: 1.2rem;">👁️</span>
+      </div>
+    </div>
+    
+    <a class="forgot-link" onclick="openForgotModal()">Forgot Password?</a>
+    
+    <button class="btn-primary" onclick="login()">Sign In</button>
+    
+    <div style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 0.85rem; color: #64748b;">
+      <p><b>Demo Accounts</b></p>
+      <p style="margin-top: 5px;">Admin: admin / admin123</p>
+      <p>Staff: staff / staff123</p>
+      <p>Customer: customer / cust123</p>
+    </div>
+  </div>
+
+  <!-- FORGOT PASSWORD MODAL -->
+  <div class="modal-overlay" id="forgotModal">
+    <div class="modal-content">
+      <h3>Reset Password</h3>
+      <p>Enter your username and your new password.</p>
+      
+      <input type="text" id="resetUser" placeholder="Username">
+      <input type="password" id="resetNewPass" placeholder="New Password">
+      
+      <p id="resetMsg" style="font-size:0.85rem;margin-bottom:15px;font-weight:600;text-align:center;min-height:20px;"></p>
+      
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeForgotModal()">Cancel</button>
+        <button class="btn-primary" onclick="resetPassword()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- PASSWORD VISIBILITY TOGGLE ---
+    function togglePassword() {
+      const p = document.getElementById('pass');
+      p.type = p.type === 'password' ? 'text' : 'password';
+    }
+
+    // --- LOGIN FUNCTION ---
+    async function login() {
+      const u = document.getElementById('user').value;
+      const p = document.getElementById('pass').value;
+      const err = document.getElementById('err');
+      
+      if (!u || !p) {
+        err.textContent = "Please enter username and password.";
+        return;
+      }
+
+      err.textContent = "Authenticating...";
+
+      try {
+        const res = await fetch('api/login.php', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username: u, password: p})
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          if (data.user.role === 'admin') window.location.href = 'admin/dashboard.html';
+          else if (data.user.role === 'staff') window.location.href = 'staff/sales.html';
+          else window.location.href = 'customer/shop.html';
+        } else {
+          err.textContent = "❌ Invalid username or password!";
+        }
+      } catch (e) {
+        err.textContent = "❌ Server error. Make sure XAMPP is running.";
+      }
+    }
+
+    // --- FORGOT PASSWORD FUNCTIONS ---
+    function openForgotModal() {
+      document.getElementById('forgotModal').classList.add('active');
+      document.getElementById('resetMsg').textContent = "";
+      document.getElementById('resetUser').value = "";
+      document.getElementById('resetNewPass').value = "";
+    }
+
+    function closeForgotModal() {
+      document.getElementById('forgotModal').classList.remove('active');
+    }
+
+    async function resetPassword() {
+      const u = document.getElementById('resetUser').value;
+      const p = document.getElementById('resetNewPass').value;
+      const msg = document.getElementById('resetMsg');
+
+      if (!u || !p) {
+        msg.style.color = "#dc3545";
+        msg.textContent = "Please fill in all fields.";
+        return;
+      }
+
+      msg.style.color = "#198754";
+      msg.textContent = "Processing...";
+
+      try {
+        const res = await fetch('api/forgot_password.php', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username: u, new_password: p})
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          msg.style.color = "#198754";
+          msg.textContent = "✅ Password reset successfully!";
+          setTimeout(closeForgotModal, 2000);
+        } else {
+          msg.style.color = "#dc3545";
+          msg.textContent = "❌ " + (data.message || "Failed to reset.");
+        }
+      } catch (e) {
+        msg.style.color = "#dc3545";
+        msg.textContent = "❌ Server error.";
+      }
+    }
+
+    // Allow pressing "Enter" to login
+    document.getElementById('pass').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') login();
+    });
+  </script>
+</body>
+</html>

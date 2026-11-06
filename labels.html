@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Print Labels - Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+
+  <!-- JsBarcode Library -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+  <style>
+    .labels-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .label-card {
+      border: 2px dashed #cbd5e1;
+      padding: 15px;
+      text-align: center;
+      background: #fff;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 130px;
+    }
+
+    .label-card h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #0f5132;
+      word-break: break-word;
+      line-height: 1.2;
+    }
+
+    /* JsBarcode writes into <svg> — style the SVG, not an <img> */
+    .label-card svg.barcode-svg {
+      width: 100%;
+      max-height: 70px;
+      height: auto;
+      margin: 5px 0;
+      display: block;
+    }
+
+    .label-card .barcode-fallback {
+      font-family: monospace;
+      font-size: 11px;
+      color: #b91c1c;
+      padding: 8px;
+      border: 1px dashed #fecaca;
+      border-radius: 4px;
+      margin: 5px 0;
+      word-break: break-all;
+    }
+
+    .label-card p {
+      margin: 6px 0 0 0;
+      color: #198754;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .label-card .barcode-text {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 2px;
+      font-family: monospace;
+    }
+
+    .loading-msg {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+    }
+
+    .error-msg { color: #b91c1c; }
+
+    @media (max-width: 720px) {
+      .labels-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 480px) {
+      .labels-grid { grid-template-columns: 1fr; }
+    }
+
+    @media print {
+      @page { margin: 10mm; }
+      .no-print, .navbar { display: none !important; }
+      body { background: #fff !important; }
+      .container { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+      .labels-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6mm !important;
+        margin-top: 0 !important;
+      }
+      .label-card {
+        border: 1px solid #000 !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+        min-height: auto;
+        border-radius: 0;
+        padding: 8px;
+        box-shadow: none !important;
+      }
+      .label-card h4 { font-size: 11pt; }
+      .label-card p  { font-size: 11pt; }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar no-print">
+    <div class="logo">🛒 Print Labels</div>
+    <nav>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="products.html">Products</a>
+      <a href="orders.html">Orders</a>
+      <a href="labels.html">Labels</a>
+      <a href="../login.html" onclick="logout(event)">Logout</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+      <div>
+        <h2 style="margin-bottom: 5px;">🏷️ Barcode Labels</h2>
+        <p style="color: #64748b; font-size: 0.9rem; margin: 0;">Print and stick these labels on your products</p>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <label style="font-size: 13px; display: flex; align-items: center; gap: 6px;">
+          Copies per product:
+          <input type="number" id="copiesInput" min="1" max="50" value="1"
+                 style="width: 60px; padding: 6px; border: 1px solid #ccc; border-radius: 6px;">
+        </label>
+        <button class="btn-primary" onclick="printLabels()" style="padding: 12px 24px; font-size: 1rem;">
+          🖨️ Print All Labels
+        </button>
+      </div>
+    </div>
+
+    <!-- Dito lalabas ang mga labels -->
+    <div class="labels-grid" id="labelsGrid">
+      <div class="loading-msg">Loading products…</div>
+    </div>
+  </div>
+
+  <script>
+    let productsCache = [];
+
+    // --- HELPERS ---
+    function esc(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function fmtPrice(n) {
+      const num = Number(n);
+      return isNaN(num) ? '0.00' : num.toFixed(2);
+    }
+
+    // --- LOGOUT ---
+    function logout(e) {
+      if (e) e.preventDefault();
+      fetch('../api/logout.php', { credentials: 'same-origin' })
+        .finally(() => { window.location.href = '../login.html'; });
+    }
+
+    // --- RENDER BARCODES (synchronous, no setTimeout race) ---
+    function renderBarcodes() {
+      if (typeof JsBarcode === 'undefined') {
+        document.querySelectorAll('.barcode-svg').forEach(svg => {
+          const wrap = svg.parentElement;
+          wrap.innerHTML = '<div class="barcode-fallback">JsBarcode failed to load</div>';
+        });
+        return;
+      }
+
+      document.querySelectorAll('svg.barcode-svg').forEach(svg => {
+        const value = svg.getAttribute('data-barcode');
+        if (!value) return;
+        try {
+          JsBarcode(svg, value, {
+            format: 'CODE128',
+            height: 40,
+            width: 1.5,
+            fontSize: 12,
+            displayValue: true,
+            margin: 4
+          });
+        } catch (err) {
+          console.error('Barcode error for "' + value + '":', err);
+          const wrap = svg.parentElement;
+          wrap.innerHTML = '<div class="barcode-fallback">⚠ ' + esc(value) + '</div>';
+        }
+      });
+    }
+
+    // --- LOAD LABELS ---
+    async function loadLabels() {
+      const grid = document.getElementById('labelsGrid');
+      grid.innerHTML = '<div class="loading-msg">Loading products…</div>';
+
+      try {
+        const res = await fetch('../api/products.php?action=get_all', {
+          credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!Array.isArray(data)) throw new Error('Unexpected response format');
+        productsCache = data;
+      } catch (err) {
+        console.error('loadLabels:', err);
+        grid.innerHTML = '<div class="loading-msg error-msg">❌ Failed to load products: ' + esc(err.message) + '</div>';
+        return;
+      }
+
+      const validProducts = productsCache.filter(p => p.barcode && String(p.barcode).trim() !== '');
+
+      if (!validProducts.length) {
+        grid.innerHTML = '<div class="loading-msg error-msg">No products with barcodes. Add barcodes on the Products page first.</div>';
+        return;
+      }
+
+      const copies = Math.max(1, Math.min(50, parseInt(document.getElementById('copiesInput').value, 10) || 1));
+
+      let html = '';
+      validProducts.forEach(p => {
+        for (let i = 0; i < copies; i++) {
+          html += `
+            <div class="label-card">
+              <h4>${esc(p.name)}</h4>
+              <svg class="barcode-svg" data-barcode="${esc(p.barcode)}"></svg>
+              <p>₱${fmtPrice(p.price)}</p>
+            </div>
+          `;
+        }
+      });
+
+      grid.innerHTML = html;
+
+      // Render immediately after DOM insertion — no setTimeout needed
+      renderBarcodes();
+    }
+
+    // --- PRINT ---
+    function printLabels() {
+      // Wait one frame to ensure SVGs are laid out before invoking the print dialog
+      requestAnimationFrame(() => window.print());
+    }
+
+    // Re-render when copies input changes
+    document.getElementById('copiesInput').addEventListener('change', loadLabels);
+
+    // Init
+    loadLabels();
+  </script>
+</body>
+</html>

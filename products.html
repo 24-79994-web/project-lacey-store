@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Products - Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    .product-img { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+    .form-grid input, .form-grid select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-overlay.active { display: flex; }
+    .modal-content { background: #fff; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+    .barcode-preview { margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; text-align: center; }
+    .barcode-preview svg { max-width: 100%; height: 60px; }
+    .barcode-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .barcode-cell svg { height: 32px; max-width: 100px; }
+    .barcode-cell small { font-size: 9px; color: #666; }
+
+    @media (max-width: 640px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid > div[style*="span 2"] { grid-column: span 1 !important; }
+      .container { overflow-x: auto; }
+      table { min-width: 720px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar"><div class="logo">🛒 Products</div>
+    <nav><a href="dashboard.html">Dashboard</a><a href="orders.html">Orders</a><a href="labels.html">Labels</a><a href="../login.html" onclick="logout(event)">Logout</a></nav>
+  </div>
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <h2>Manage Products</h2>
+      <button class="btn-primary" onclick="openAddModal()">+ Add New Product</button>
+    </div>
+
+    <table id="prodTable">
+      <thead>
+        <tr><th>Image</th><th>ID</th><th>Barcode</th><th>Name</th><th>Price</th><th>Stock</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="prodTbody">
+        <tr><td colspan="7" style="text-align:center; padding:20px; color:#666;">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ADD/EDIT MODAL -->
+  <div class="modal-overlay" id="productModal">
+    <div class="modal-content">
+      <h3 id="modalTitle" style="margin-bottom: 20px; color: #0f5132;">Add Product</h3>
+      <input type="hidden" id="pId">
+      <div class="form-grid">
+        <div>
+          <label style="font-size: 12px; font-weight: bold;">Product Name</label>
+          <input id="pName" placeholder="e.g. Milo 200g" maxlength="120">
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: bold;">Category</label>
+          <input id="pCat" placeholder="e.g. Beverages" maxlength="60">
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: bold;">Price (₱)</label>
+          <input id="pPrice" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: bold;">Stock</label>
+          <input id="pStock" type="number" min="0" placeholder="0">
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: bold;">Reorder Level</label>
+          <input id="pReorder" type="number" min="0" placeholder="10">
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: bold;">Barcode (Optional)</label>
+          <input id="pBarcode" placeholder="Auto-generated if blank" maxlength="32">
+        </div>
+        <div style="grid-column: span 2;">
+          <label style="font-size: 12px; font-weight: bold;">Image URL (Optional)</label>
+          <input id="pImage" placeholder="https://example.com/image.jpg" maxlength="500">
+          <div class="barcode-preview" id="barcodePreview" style="display:none;">
+            <svg id="barcodeSvg"></svg>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button class="btn-cancel" style="flex: 1; background: #e2e8f0; color: #333; border: none; padding: 10px; border-radius: 8px; cursor: pointer;" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" style="flex: 2;" id="saveBtn" onclick="saveProduct()">Save Product</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let productsData = [];
+
+    // --- SAFE HTML ESCAPING (prevents XSS from product fields) ---
+    function esc(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function fmtPrice(n) {
+      const num = Number(n);
+      return isNaN(num) ? '0.00' : num.toFixed(2);
+    }
+
+    // --- LOAD PRODUCTS ---
+    async function loadProducts() {
+      const tbody = document.getElementById('prodTbody');
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#666;">Loading…</td></tr>';
+
+      try {
+        const res = await fetch('../api/products.php?action=get_all', { credentials: 'same-origin' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!Array.isArray(data)) throw new Error('Unexpected response format');
+        productsData = data;
+      } catch (err) {
+        console.error('loadProducts:', err);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#b91c1c;">Failed to load products. ' + esc(err.message) + '</td></tr>';
+        return;
+      }
+
+      if (!productsData.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#666;">No products yet. Click “Add New Product”.</td></tr>';
+        return;
+      }
+
+      const rows = productsData.map(p => {
+        const imgSrc = p.image_url ? esc(p.image_url) : 'https://via.placeholder.com/50?text=No+Img';
+        const safeName = esc(p.name);
+        const safeBarcode = esc(p.barcode || '');
+        const safeId = Number(p.id) || 0;
+        const barcodeId = 'bc-' + safeId;
+
+        return `<tr>
+          <td>
+            <img src="${imgSrc}" class="product-img" alt="${safeName}"
+                 onerror="this.onerror=null;this.src='https://via.placeholder.com/50?text=No+Img';">
+          </td>
+          <td>#${safeId}</td>
+          <td>
+            <div class="barcode-cell">
+              ${safeBarcode ? `<svg id="${barcodeId}"></svg><small>${safeBarcode}</small>` : '<small>—</small>'}
+            </div>
+          </td>
+          <td style="font-weight: 600;">${safeName}</td>
+          <td>₱${fmtPrice(p.price)}</td>
+          <td>${Number(p.stock) || 0}</td>
+          <td>
+            <button class="btn-primary" style="padding: 5px 10px; font-size: 12px; margin-right: 5px;" onclick="openEditModal(${safeId})">Edit</button>
+            <button class="btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="delProduct(${safeId})">Delete</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      tbody.innerHTML = rows;
+
+      // Render barcode SVGs using JsBarcode
+      if (typeof JsBarcode !== 'undefined') {
+        productsData.forEach(p => {
+          if (!p.barcode) return;
+          const el = document.getElementById('bc-' + p.id);
+          if (!el) return;
+          try {
+            JsBarcode(el, String(p.barcode), {
+              format: 'CODE128',
+              displayValue: false,
+              height: 32,
+              margin: 0
+            });
+          } catch (e) {
+            console.warn('Barcode render failed for', p.barcode, e);
+          }
+        });
+      }
+    }
+
+    // --- MODAL ---
+    function openAddModal() {
+      document.getElementById('modalTitle').textContent = 'Add New Product';
+      document.getElementById('pId').value = '';
+      document.getElementById('pName').value = '';
+      document.getElementById('pCat').value = '';
+      document.getElementById('pPrice').value = '';
+      document.getElementById('pStock').value = '';
+      document.getElementById('pReorder').value = '10';
+      document.getElementById('pBarcode').value = '';
+      document.getElementById('pImage').value = '';
+      updateBarcodePreview();
+      document.getElementById('productModal').classList.add('active');
+      setTimeout(() => document.getElementById('pName').focus(), 50);
+    }
+
+    function openEditModal(id) {
+      const p = productsData.find(x => x.id === id);
+      if (!p) return;
+
+      document.getElementById('modalTitle').textContent = 'Edit Product: ' + p.name;
+      document.getElementById('pId').value = p.id;
+      document.getElementById('pName').value = p.name || '';
+      document.getElementById('pCat').value = p.category || '';
+      document.getElementById('pPrice').value = p.price ?? '';
+      document.getElementById('pStock').value = p.stock ?? '';
+      document.getElementById('pReorder').value = p.reorder_level ?? 10;
+      document.getElementById('pBarcode').value = p.barcode || '';
+      document.getElementById('pImage').value = p.image_url || '';
+      updateBarcodePreview();
+      document.getElementById('productModal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('productModal').classList.remove('active');
+    }
+
+    // Close on backdrop click
+    document.getElementById('productModal').addEventListener('click', (e) => {
+      if (e.target.id === 'productModal') closeModal();
+    });
+
+    // Barcode live preview
+    function updateBarcodePreview() {
+      const val = document.getElementById('pBarcode').value.trim();
+      const wrap = document.getElementById('barcodePreview');
+      const svg = document.getElementById('barcodeSvg');
+      if (!val || typeof JsBarcode === 'undefined') {
+        wrap.style.display = 'none';
+        return;
+      }
+      try {
+        JsBarcode(svg, val, { format: 'CODE128', displayValue: true, height: 50, margin: 6 });
+        wrap.style.display = 'block';
+      } catch (e) {
+        wrap.style.display = 'none';
+      }
+    }
+    document.getElementById('pBarcode').addEventListener('input', updateBarcodePreview);
+
+    // --- SAVE ---
+    async function saveProduct() {
+      const saveBtn = document.getElementById('saveBtn');
+      const id = document.getElementById('pId').value;
+
+      const data = {
+        name: document.getElementById('pName').value.trim(),
+        category: document.getElementById('pCat').value.trim(),
+        price: parseFloat(document.getElementById('pPrice').value) || 0,
+        stock: parseInt(document.getElementById('pStock').value, 10) || 0,
+        reorder: parseInt(document.getElementById('pReorder').value, 10) || 10,
+        barcode: document.getElementById('pBarcode').value.trim(),
+        image_url: document.getElementById('pImage').value.trim()
+      };
+
+      if (!data.name) return alert('Please enter a product name.');
+      if (data.price <= 0) return alert('Price must be greater than 0.');
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+
+      try {
+        const url = id
+          ? '../api/products.php?action=update_product'
+          : '../api/products.php?action=add';
+
+        const payload = id ? { ...data, id: parseInt(id, 10) } : data;
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload)
+        });
+
+        const text = await res.text();
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (_) {}
+
+        if (!res.ok || (json && json.success === false)) {
+          throw new Error((json && json.message) || ('HTTP ' + res.status + ' ' + text.slice(0, 200)));
+        }
+
+        closeModal();
+        await loadProducts();
+      } catch (err) {
+        console.error('saveProduct:', err);
+        alert('Save failed: ' + err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Product';
+      }
+    }
+
+    // --- DELETE ---
+    async function delProduct(id) {
+      if (!confirm('Are you sure you want to delete this product?')) return;
+      try {
+        const res = await fetch('../api/products.php?action=delete&id=' + encodeURIComponent(id), {
+          credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        await loadProducts();
+      } catch (err) {
+        console.error('delProduct:', err);
+        alert('Delete failed: ' + err.message);
+      }
+    }
+
+    // --- LOGOUT ---
+    function logout(e) {
+      if (e) e.preventDefault();
+      fetch('../api/logout.php', { credentials: 'same-origin' })
+        .finally(() => { window.location.href = '../login.html'; });
+    }
+
+    // Press Enter to save (except inside textarea)
+    document.getElementById('productModal').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+        e.preventDefault();
+        saveProduct();
+      }
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Init
+    loadProducts();
+  </script>
+</body>
+</html>

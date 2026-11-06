@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders - Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; color: #fff; display: inline-block; white-space: nowrap; }
+    .status-pending   { background: #f59e0b; }
+    .status-ready     { background: #3b82f6; }
+    .status-completed { background: #10b981; }
+    .status-cancelled { background: #ef4444; }
+    .status-unknown   { background: #6b7280; }
+
+    .orders-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .orders-toolbar input[type="search"] {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      min-width: 220px;
+      font-size: 14px;
+    }
+    .empty-row td {
+      text-align: center;
+      padding: 24px;
+      color: #666;
+    }
+    .error-row td {
+      text-align: center;
+      padding: 24px;
+      color: #b91c1c;
+    }
+    select.status-select {
+      padding: 5px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      background: #fff;
+    }
+    select.status-select:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    @media (max-width: 720px) {
+      .container { overflow-x: auto; }
+      table { min-width: 720px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <div class="logo">🛒 Lacey Store Admin</div>
+    <nav>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="products.html">Products</a>
+      <a href="orders.html">Orders</a>
+      <a href="labels.html">Labels</a>
+      <a href="../login.html" onclick="logout(event)">Logout</a>
+    </nav>
+  </div>
+  <div class="container">
+    <div class="orders-toolbar">
+      <h2 style="margin: 0;">Customer Orders</h2>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <input type="search" id="searchOrders" placeholder="Search by customer or order #…">
+        <button class="btn-primary" onclick="loadOrders()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <table id="ordersTable">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Customer</th>
+          <th>Total</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="ordersTbody">
+        <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    let ordersData = [];
+    let searchTerm = '';
+
+    // --- HELPERS ---
+    function esc(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function fmtPrice(n) {
+      const num = Number(n);
+      return isNaN(num) ? '0.00' : num.toFixed(2);
+    }
+
+    function fmtDate(raw) {
+      if (!raw) return '—';
+      // Handles both "2025-01-31 14:22:00" and ISO strings safely
+      const d = new Date(String(raw).replace(' ', 'T'));
+      if (isNaN(d.getTime())) return esc(raw);
+      return d.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function statusClass(s) {
+      const known = ['pending', 'ready', 'completed', 'cancelled'];
+      return 'status-' + (known.includes(s) ? s : 'unknown');
+    }
+
+    function statusLabel(s) {
+      return (s || 'unknown').toString().toUpperCase();
+    }
+
+    // --- LOAD ORDERS ---
+    async function loadOrders() {
+      const tbody = document.getElementById('ordersTbody');
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Loading…</td></tr>';
+
+      try {
+        const res = await fetch('../api/orders.php?action=get_all', {
+          credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!Array.isArray(data)) throw new Error('Unexpected response format');
+        ordersData = data;
+      } catch (err) {
+        console.error('loadOrders:', err);
+        tbody.innerHTML = '<tr class="error-row"><td colspan="6">Failed to load orders: ' + esc(err.message) + '</td></tr>';
+        return;
+      }
+
+      renderOrders();
+    }
+
+    function renderOrders() {
+      const tbody = document.getElementById('ordersTbody');
+      const q = searchTerm.trim().toLowerCase();
+
+      const filtered = !q ? ordersData : ordersData.filter(o => {
+        const idStr = String(o.id);
+        const name = String(o.customer_name || '').toLowerCase();
+        const contact = String(o.customer_contact || '').toLowerCase();
+        return idStr.includes(q) || name.includes(q) || contact.includes(q);
+      });
+
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">' +
+          (ordersData.length ? 'No orders match your search.' : 'No orders yet.') +
+          '</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(o => {
+        const safeId = Number(o.id) || 0;
+        const status = String(o.status || 'pending').toLowerCase();
+        const customerName = esc(o.customer_name || '—');
+        const customerContact = o.customer_contact
+          ? '<br><small style="color:#666">' + esc(o.customer_contact) + '</small>'
+          : '';
+
+        return `<tr>
+          <td>#${safeId}</td>
+          <td>${customerName}${customerContact}</td>
+          <td style="font-weight:bold; color:#198754;">₱${fmtPrice(o.total)}</td>
+          <td>${fmtDate(o.order_date)}</td>
+          <td><span class="status-badge ${statusClass(status)}">${statusLabel(status)}</span></td>
+          <td>
+            <select class="status-select" data-id="${safeId}" onchange="updateStatus(${safeId}, this)">
+              <option value="pending"   ${status === 'pending'   ? 'selected' : ''}>Pending</option>
+              <option value="ready"     ${status === 'ready'     ? 'selected' : ''}>Ready</option>
+              <option value="completed" ${status === 'completed' ? 'selected' : ''}>Completed</option>
+              <option value="cancelled" ${status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+            </select>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // --- UPDATE STATUS ---
+    async function updateStatus(id, selectEl) {
+      const newStatus = selectEl.value;
+      const original = selectEl.dataset.original || null;
+
+      selectEl.disabled = true;
+      try {
+        const res = await fetch('../api/orders.php?action=update_status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ id: id, status: newStatus })
+        });
+
+        const text = await res.text();
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (_) {}
+
+        if (!res.ok || (json && json.success === false)) {
+          throw new Error((json && json.message) || ('HTTP ' + res.status));
+        }
+
+        // Update local cache so a re-render reflects the change without refetch
+        const row = ordersData.find(o => Number(o.id) === Number(id));
+        if (row) row.status = newStatus;
+
+        // Re-render the row's badge only (lighter than full reload)
+        const rowEl = selectEl.closest('tr');
+        const badge = rowEl && rowEl.querySelector('.status-badge');
+        if (badge) {
+          badge.className = 'status-badge ' + statusClass(newStatus);
+          badge.textContent = statusLabel(newStatus);
+        }
+      } catch (err) {
+        console.error('updateStatus:', err);
+        alert('Could not update status: ' + err.message);
+        // Revert the dropdown to the previous status
+        selectEl.value = (ordersData.find(o => Number(o.id) === Number(id)) || {}).status || 'pending';
+      } finally {
+        selectEl.disabled = false;
+      }
+    }
+
+    // --- SEARCH ---
+    document.getElementById('searchOrders').addEventListener('input', (e) => {
+      searchTerm = e.target.value;
+      renderOrders();
+    });
+
+    // --- LOGOUT ---
+    function logout(e) {
+      if (e) e.preventDefault();
+      fetch('../api/logout.php', { credentials: 'same-origin' })
+        .finally(() => { window.location.href = '../login.html'; });
+    }
+
+    // Init
+    loadOrders();
+  </script>
+</body>
+</html>

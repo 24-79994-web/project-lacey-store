@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>POS Terminal - Lacey Store</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100vh; height: 100dvh;
+      margin: 0; padding: 0; overflow: hidden;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #1e293b;
+    }
+
+    body { display: flex; flex-direction: column; color: #e2e8f0; }
+
+    /* --- HEADER --- */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px; background: #0f172a;
+      border-bottom: 1px solid #334155; flex-shrink: 0;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; font-weight: 600; color: #f8fafc; }
+    .status-badge {
+      font-size: 0.8rem; padding: 4px 10px; border-radius: 999px;
+      background: #22c55e; color: #052e16; font-weight: 600;
+    }
+
+    /* --- MAIN LAYOUT --- */
+    main { display: flex; flex: 1; min-height: 0; gap: 16px; padding: 16px; }
+
+    /* --- PRODUCT PANEL --- */
+    .products-panel { flex: 2; display: flex; flex-direction: column; min-height: 0; gap: 12px; }
+    .search-bar { display: flex; gap: 8px; flex-shrink: 0; }
+    .search-bar input {
+      flex: 1; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid #334155; background: #0f172a; color: #e2e8f0;
+      font-size: 1rem; outline: none;
+    }
+    .search-bar input:focus { border-color: #3b82f6; }
+    .search-bar button {
+      padding: 10px 16px; border-radius: 8px; border: none;
+      background: #3b82f6; color: white; font-weight: 600; cursor: pointer;
+    }
+    .search-bar button:hover { background: #2563eb; }
+
+    .product-grid {
+      flex: 1; overflow-y: auto; display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px; align-content: start; padding-right: 4px;
+    }
+    .product-card {
+      background: #0f172a; border: 1px solid #334155; border-radius: 10px;
+      padding: 12px; cursor: pointer;
+      transition: border-color 0.15s, transform 0.1s;
+    }
+    .product-card:hover { border-color: #3b82f6; }
+    .product-card:active { transform: scale(0.97); }
+    .product-card .name { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
+    .product-card .price { color: #22c55e; font-weight: 700; font-size: 1rem; }
+    .product-card .sku { color: #64748b; font-size: 0.75rem; margin-top: 4px; }
+
+    /* --- CART PANEL --- */
+    .cart-panel {
+      flex: 1; display: flex; flex-direction: column;
+      background: #0f172a; border: 1px solid #334155;
+      border-radius: 12px; min-height: 0; min-width: 320px;
+    }
+    .cart-header {
+      padding: 14px 16px; border-bottom: 1px solid #334155;
+      font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+    }
+    .cart-items { flex: 1; overflow-y: auto; padding: 8px; }
+    .cart-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; border-radius: 8px; background: #1e293b;
+      margin-bottom: 8px; gap: 10px;
+    }
+    .cart-item .item-info { flex: 1; min-width: 0; }
+    .cart-item .item-name {
+      font-weight: 600; font-size: 0.9rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cart-item .item-price { color: #22c55e; font-size: 0.85rem; }
+    .cart-item .qty-controls { display: flex; align-items: center; gap: 6px; }
+    .cart-item .qty-controls button {
+      width: 26px; height: 26px; border-radius: 6px;
+      border: 1px solid #334155; background: #1e293b;
+      color: #e2e8f0; cursor: pointer; font-weight: 700; line-height: 1;
+    }
+    .cart-item .qty-controls button:hover { background: #334155; }
+    .cart-item .qty-controls span { min-width: 20px; text-align: center; font-weight: 600; }
+    .cart-item .remove-btn {
+      background: transparent; border: none; color: #ef4444;
+      cursor: pointer; font-size: 1.1rem; padding: 2px 6px;
+    }
+    .cart-empty { text-align: center; color: #64748b; padding: 40px 16px; font-size: 0.9rem; }
+
+    .cart-footer {
+      border-top: 1px solid #334155; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .totals-row { display: flex; justify-content: space-between; font-size: 0.9rem; color: #94a3b8; }
+    .totals-row.total { font-size: 1.25rem; font-weight: 700; color: #f8fafc; }
+    .checkout-btn {
+      padding: 14px; border-radius: 10px; border: none;
+      background: #22c55e; color: #052e16;
+      font-size: 1.05rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .checkout-btn:hover { background: #16a34a; }
+    .checkout-btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+    /* --- MODAL / SCANNER --- */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
+      display: none; align-items: center; justify-content: center;
+      z-index: 100; padding: 20px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: #0f172a; border: 1px solid #334155; border-radius: 14px;
+      padding: 20px; width: 100%; max-width: 520px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .modal h2 { margin: 0; font-size: 1.1rem; }
+    #scanner-viewport {
+      width: 100%; aspect-ratio: 4 / 3; background: #000;
+      border-radius: 10px; overflow: hidden; position: relative;
+    }
+    #scanner-viewport video, #scanner-viewport canvas {
+      width: 100% !important; height: 100% !important; object-fit: cover;
+    }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-actions button {
+      padding: 10px 18px; border-radius: 8px;
+      border: 1px solid #334155; background: #1e293b;
+      color: #e2e8f0; font-weight: 600; cursor: pointer;
+    }
+    .modal-actions button.primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    .modal-actions button.success { background: #22c55e; border-color: #22c55e; color: #052e16; }
+    .modal-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* --- PAYMENT MODAL --- */
+    .payment-modal { max-width: 460px; }
+    .pay-summary {
+      background: #1e293b; border-radius: 10px; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .pay-summary .row {
+      display: flex; justify-content: space-between; font-size: 0.9rem; color: #94a3b8;
+    }
+    .pay-summary .row.total {
+      font-size: 1.6rem; font-weight: 800; color: #f8fafc;
+      border-top: 1px solid #334155; padding-top: 8px; margin-top: 4px;
+    }
+    .pay-label {
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #94a3b8; margin-top: 6px;
+    }
+    .pay-input {
+      width: 100%; padding: 14px 16px; font-size: 1.5rem; font-weight: 700;
+      border-radius: 10px; border: 1px solid #334155;
+      background: #0f172a; color: #f8fafc; outline: none;
+      font-family: 'Courier New', monospace; text-align: right;
+    }
+    .pay-input:focus { border-color: #22c55e; }
+    .quick-cash {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    }
+    .quick-cash button {
+      padding: 10px 4px; border-radius: 8px;
+      border: 1px solid #334155; background: #1e293b;
+      color: #e2e8f0; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+    }
+    .quick-cash button:hover { background: #334155; border-color: #3b82f6; }
+    .change-display {
+      background: #052e16; border: 1px solid #166534; border-radius: 10px;
+      padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .change-display .label { font-size: 0.85rem; color: #86efac; text-transform: uppercase; letter-spacing: 0.5px; }
+    .change-display .amount { font-size: 1.6rem; font-weight: 800; color: #22c55e; font-family: 'Courier New', monospace; }
+    .change-display.insufficient { background: #450a0a; border-color: #7f1d1d; }
+    .change-display.insufficient .label { color: #fca5a5; }
+    .change-display.insufficient .amount { color: #ef4444; }
+    .pay-error { color: #fca5a5; font-size: 0.85rem; min-height: 1em; }
+
+    /* --- RECEIPT (hidden on screen, shown on print) --- */
+    #receipt { display: none; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #0f172a; border: 1px solid #334155; color: #f8fafc;
+      padding: 12px 22px; border-radius: 10px; font-weight: 600;
+      opacity: 0; transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none; z-index: 200;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.error { border-color: #ef4444; color: #fecaca; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      main { flex-direction: column; }
+      .cart-panel { min-width: 0; max-height: 45%; }
+      .product-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+    }
+    @media (max-width: 480px) {
+      .quick-cash { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* ===================================================== */
+    /* PRINT STYLES — only the receipt will print            */
+    /* ===================================================== */
+    @media print {
+      @page { size: 80mm auto; margin: 4mm; }
+
+      body > * { display: none !important; }
+      #receipt {
+        display: block !important;
+        width: 72mm;
+        font-family: 'Courier New', monospace;
+        font-size: 11px; color: #000; background: #fff;
+        line-height: 1.35;
+      }
+      #receipt h1 { font-size: 14px; text-align: center; margin: 0 0 4px; }
+      #receipt .center { text-align: center; }
+      #receipt .small  { font-size: 10px; }
+      #receipt hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+      #receipt table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      #receipt table td { padding: 1px 0; vertical-align: top; }
+      #receipt table td.right { text-align: right; }
+      #receipt .item-line { margin: 3px 0; }
+      #receipt .item-name { font-weight: bold; }
+      #receipt .grand {
+        font-weight: bold; font-size: 13px;
+        border-top: 1px dashed #000; padding-top: 4px; margin-top: 4px;
+      }
+      #receipt .thanks { margin-top: 8px; text-align: center; font-size: 10px; }
+      #receipt .qr-wrap {
+        display: flex; flex-direction: column; align-items: center;
+        margin-top: 6px;
+      }
+      #receipt .qr-wrap canvas,
+      #receipt .qr-wrap img {
+        width: 28mm !important; height: 28mm !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛒 Lacey Store POS</h1>
+    <span class="status-badge" id="statusBadge">Online</span>
+  </header>
+
+  <main>
+    <section class="products-panel">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search product or scan barcode…" autocomplete="off">
+        <button id="scanBtn">📷 Scan</button>
+      </div>
+      <div class="product-grid" id="productGrid"></div>
+    </section>
+
+    <aside class="cart-panel">
+      <div class="cart-header">
+        <span>Cart</span>
+        <span id="cartCount">0 items</span>
+      </div>
+      <div class="cart-items" id="cartItems">
+        <div class="cart-empty">Cart is empty. Tap a product to add.</div>
+      </div>
+      <div class="cart-footer">
+        <div class="totals-row"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+        <div class="totals-row"><span>Tax (8%)</span><span id="tax">$0.00</span></div>
+        <div class="totals-row total"><span>Total</span><span id="total">$0.00</span></div>
+        <button class="checkout-btn" id="checkoutBtn" disabled>Checkout &amp; Print Receipt</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- SCANNER MODAL -->
+  <div class="modal-overlay" id="scannerModal">
+    <div class="modal">
+      <h2>Scan Barcode</h2>
+      <div id="scanner-viewport"></div>
+      <div class="modal-actions">
+        <button id="closeScanner">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT MODAL -->
+  <div class="modal-overlay" id="paymentModal">
+    <div class="modal payment-modal">
+      <h2>💵 Payment</h2>
+
+      <div class="pay-summary">
+        <div class="row"><span>Subtotal</span><span id="paySubtotal">$0.00</span></div>
+        <div class="row"><span>Tax (8%)</span><span id="payTax">$0.00</span></div>
+        <div class="row total"><span>Total Due</span><span id="payTotal">$0.00</span></div>
+      </div>
+
+      <label class="pay-label" for="cashInput">Cash Tendered</label>
+      <input type="text" id="cashInput" class="pay-input" inputmode="decimal" placeholder="0.00" autocomplete="off">
+
+      <div class="quick-cash" id="quickCash">
+        <button data-add="0.01">Exact</button>
+        <button data-add="5">+$5</button>
+        <button data-add="10">+$10</button>
+        <button data-add="20">+$20</button>
+        <button data-add="50">+$50</button>
+        <button data-add="100">+$100</button>
+        <button data-add="200">+$200</button>
+        <button data-add="500">+$500</button>
+      </div>
+
+      <div class="change-display" id="changeDisplay">
+        <span class="label">Change</span>
+        <span class="amount" id="changeAmount">$0.00</span>
+      </div>
+      <div class="pay-error" id="payError"></div>
+
+      <div class="modal-actions">
+        <button id="cancelPayment">Cancel</button>
+        <button id="confirmPayment" class="success" disabled>Print Receipt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECEIPT (hidden on screen) -->
+  <div id="receipt"></div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const PRODUCTS = [
+      { sku: '1001', name: 'Milk 1L',        price: 3.49 },
+      { sku: '1002', name: 'Bread Loaf',     price: 2.99 },
+      { sku: '1003', name: 'Eggs (12)',      price: 4.25 },
+      { sku: '1004', name: 'Bananas 1kg',    price: 1.89 },
+      { sku: '1005', name: 'Coffee 250g',    price: 7.50 },
+      { sku: '1006', name: 'Sugar 1kg',      price: 2.15 },
+      { sku: '1007', name: 'Butter 250g',    price: 3.75 },
+      { sku: '1008', name: 'Orange Juice',   price: 3.99 },
+      { sku: '1009', name: 'Chocolate Bar',  price: 1.50 },
+      { sku: '1010', name: 'Pasta 500g',     price: 1.95 },
+      { sku: '1011', name: 'Tomato Sauce',   price: 2.49 },
+      { sku: '1012', name: 'Cheddar 200g',   price: 4.99 },
+    ];
+
+    const STORE = {
+      name: 'Lacey Store',
+      address: '123 Main St, Your City',
+      contact: '0917-000-0000',
+      // Base URL for receipt verification QR. Change to your real domain.
+      verifyBase: 'https://laceystore.example.com/receipt'
+    };
+
+    const TAX_RATE = 0.08;
+    let cart = [];
+    let quaggaRunning = false;
+    let receiptCounter = parseInt(localStorage.getItem('receiptCounter') || '0', 10);
+
+    let pendingOrder = null; // built when checkout is clicked
+
+    const $ = (id) => document.getElementById(id);
+    const productGrid  = $('productGrid');
+    const cartItemsEl  = $('cartItems');
+    const cartCountEl  = $('cartCount');
+    const subtotalEl   = $('subtotal');
+    const taxEl        = $('tax');
+    const totalEl      = $('total');
+    const checkoutBtn  = $('checkoutBtn');
+    const searchInput  = $('searchInput');
+    const scannerModal = $('scannerModal');
+    const paymentModal = $('paymentModal');
+    const receiptEl    = $('receipt');
+    const toastEl      = $('toast');
+
+    const cashInput    = $('cashInput');
+    const changeAmount = $('changeAmount');
+    const changeDisplay= $('changeDisplay');
+    const payError     = $('payError');
+    const confirmBtn   = $('confirmPayment');
+
+    const money = (n) => '$' + Number(n).toFixed(2);
+
+    function esc(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Parse a cash string safely: strip $ , spaces; allow "5.50"
+    function parseCash(v) {
+      if (v === null || v === undefined) return NaN;
+      const cleaned = String(v).replace(/[^0-9.]/g, '');
+      if (cleaned === '' || cleaned === '.') return 0;
+      const n = parseFloat(cleaned);
+      return isNaN(n) ? NaN : n;
+    }
+
+    // Format cash input as 2-decimal display while typing
+    function normalizeCashInput(raw) {
+      // Keep digits and one dot; limit decimals to 2
+      let s = String(raw).replace(/[^0-9.]/g, '');
+      const parts = s.split('.');
+      if (parts.length > 2) s = parts[0] + '.' + parts.slice(1).join('');
+      if (parts[0] && parts[0].length > 9) parts[0] = parts[0].slice(0, 9);
+      return s;
+    }
+
+    // --- TOAST ---
+    let toastTimer = null;
+    function toast(msg, isError = false) {
+      toastEl.textContent = msg;
+      toastEl.className = 'toast show' + (isError ? ' error' : '');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toastEl.className = 'toast' + (isError ? ' error' : ''); }, 1800);
+    }
+
+    // --- PRODUCTS ---
+    function renderProducts(filter = '') {
+      const q = filter.trim().toLowerCase();
+      const list = PRODUCTS.filter(p =>
+        !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
+      );
+      productGrid.innerHTML = '';
+      if (!list.length) {
+        productGrid.innerHTML = '<div class="cart-empty" style="grid-column:1/-1;">No products found.</div>';
+        return;
+      }
+      list.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.innerHTML = `
+          <div class="name">${esc(p.name)}</div>
+          <div class="price">${money(p.price)}</div>
+          <div class="sku">SKU: ${esc(p.sku)}</div>
+        `;
+        card.addEventListener('click', () => addToCart(p.sku));
+        productGrid.appendChild(card);
+      });
+    }
+
+    // --- CART ---
+    function findProduct(sku) { return PRODUCTS.find(p => p.sku === sku); }
+
+    function addToCart(sku) {
+      const product = findProduct(sku);
+      if (!product) return;
+      const line = cart.find(l => l.sku === sku);
+      if (line) line.qty += 1;
+      else cart.push({ sku: product.sku, name: product.name, price: product.price, qty: 1 });
+      renderCart();
+    }
+
+    function changeQty(sku, delta) {
+      const line = cart.find(l => l.sku === sku);
+      if (!line) return;
+      line.qty += delta;
+      if (line.qty <= 0) cart = cart.filter(l => l.sku !== sku);
+      renderCart();
+    }
+
+    function removeItem(sku) {
+      cart = cart.filter(l => l.sku !== sku);
+      renderCart();
+    }
+
+    function renderCart() {
+      cartItemsEl.innerHTML = '';
+      if (!cart.length) {
+        cartItemsEl.innerHTML = '<div class="cart-empty">Cart is empty. Tap a product to add.</div>';
+      } else {
+        cart.forEach(line => {
+          const el = document.createElement('div');
+          el.className = 'cart-item';
+          el.innerHTML = `
+            <div class="item-info">
+              <div class="item-name">${esc(line.name)}</div>
+              <div class="item-price">${money(line.price)} × ${line.qty} = ${money(line.price * line.qty)}</div>
+            </div>
+            <div class="qty-controls">
+              <button data-act="dec">−</button>
+              <span>${line.qty}</span>
+              <button data-act="inc">+</button>
+            </div>
+            <button class="remove-btn" title="Remove">✕</button>
+          `;
+          el.querySelector('[data-act="dec"]').addEventListener('click', () => changeQty(line.sku, -1));
+          el.querySelector('[data-act="inc"]').addEventListener('click', () => changeQty(line.sku, 1));
+          el.querySelector('.remove-btn').addEventListener('click', () => removeItem(line.sku));
+          cartItemsEl.appendChild(el);
+        });
+      }
+
+      const count    = cart.reduce((s, l) => s + l.qty, 0);
+      const subtotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
+      const tax      = subtotal * TAX_RATE;
+      const total    = subtotal + tax;
+
+      cartCountEl.textContent = `${count} item${count === 1 ? '' : 's'}`;
+      subtotalEl.textContent  = money(subtotal);
+      taxEl.textContent       = money(tax);
+      totalEl.textContent     = money(total);
+      checkoutBtn.disabled    = cart.length === 0;
+    }
+
+    // --- PAYMENT MODAL ---
+    function openPaymentModal() {
+      if (!cart.length) return;
+
+      const subtotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
+      const tax      = subtotal * TAX_RATE;
+      const total    = subtotal + tax;
+
+      pendingOrder = {
+        items: cart.map(l => ({ ...l })),
+        subtotal, tax, total,
+        cash: 0, change: 0
+      };
+
+      $('paySubtotal').textContent = money(subtotal);
+      $('payTax').textContent      = money(tax);
+      $('payTotal').textContent    = money(total);
+
+      cashInput.value = '';
+      payError.textContent = '';
+      updateChange(total);
+
+      paymentModal.classList.add('active');
+      setTimeout(() => cashInput.focus(), 60);
+    }
+
+    function updateChange(totalDue) {
+      const cash = parseCash(cashInput.value);
+      const safeCash = isNaN(cash) ? 0 : cash;
+      const change = safeCash - totalDue;
+      const sufficient = safeCash + 1e-9 >= totalDue;
+
+      changeAmount.textContent = money(Math.max(0, change));
+      changeDisplay.classList.toggle('insufficient', !sufficient);
+      changeDisplay.querySelector('.label').textContent = sufficient ? 'Change' : 'Short by';
+      if (!sufficient) {
+        changeAmount.textContent = money(Math.abs(change));
+      }
+
+      confirmBtn.disabled = !sufficient || safeCash === 0;
+      return { cash: safeCash, change, sufficient };
+    }
+
+    // Cash input: allow only numeric-ish characters, recalc change
+    cashInput.addEventListener('input', () => {
+      const cleaned = normalizeCashInput(cashInput.value);
+      if (cleaned !== cashInput.value) cashInput.value = cleaned;
+
+      if (!pendingOrder) return;
+      payError.textContent = '';
+      updateChange(pendingOrder.total);
+    });
+
+    // Quick cash buttons: "Exact" sets exactly the total; others ADD to current cash
+    $('quickCash').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn || !pendingOrder) return;
+      const val = parseFloat(btn.dataset.add);
+      if (isNaN(val)) return;
+
+      if (val === 0.01) {
+        // Treat "Exact" specially: set exactly total
+        cashInput.value = pendingOrder.total.toFixed(2);
+      } else {
+        const current = parseCash(cashInput.value) || 0;
+        cashInput.value = (current + val).toFixed(2);
+      }
+      payError.textContent = '';
+      updateChange(pendingOrder.total);
+      cashInput.focus();
+    });
+
+    cashInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!confirmBtn.disabled) confirmPayment();
+      } else if (e.key === 'Escape') {
+        closePaymentModal();
+      }
+    });
+
+    function closePaymentModal() {
+      paymentModal.classList.remove('active');
+      pendingOrder = null;
+    }
+
+    $('cancelPayment').addEventListener('click', closePaymentModal);
+    paymentModal.addEventListener('click', (e) => {
+      if (e.target === paymentModal) closePaymentModal();
+    });
+
+    // --- RECEIPT BUILD + QR ---
+    function buildReceiptHTML(order) {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+      const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      const rows = order.items.map(item => `
+        <div class="item-line">
+          <div class="item-name">${esc(item.name)}</div>
+          <table>
+            <tr>
+              <td>${item.qty} x ${money(item.price)}</td>
+              <td class="right">${money(item.price * item.qty)}</td>
+            </tr>
+          </table>
+        </div>
+      `).join('');
+
+      const verifyUrl = `${STORE.verifyBase}/${encodeURIComponent(order.number)}`;
+
+      return `
+        <h1>${esc(STORE.name)}</h1>
+        <div class="center small">${esc(STORE.address)}</div>
+        <div class="center small">Tel: ${esc(STORE.contact)}</div>
+        <hr>
+        <div class="small">
+          <div>Receipt #: ${esc(order.number)}</div>
+          <div>Date: ${esc(dateStr)} ${esc(timeStr)}</div>
+        </div>
+        <hr>
+        ${rows}
+        <hr>
+        <table>
+          <tr><td>Subtotal</td><td class="right">${money(order.subtotal)}</td></tr>
+          <tr><td>Tax (${(TAX_RATE * 100).toFixed(0)}%)</td><td class="right">${money(order.tax)}</td></tr>
+          <tr><td class="grand">TOTAL</td><td class="right grand">${money(order.total)}</td></tr>
+          <tr><td>Cash</td><td class="right">${money(order.cash)}</td></tr>
+          <tr><td>Change</td><td class="right">${money(order.change)}</td></tr>
+        </table>
+        <hr>
+        <div class="qr-wrap">
+          <div id="receiptQr"></div>
+          <div class="small" style="margin-top: 2px;">Scan to verify receipt</div>
+        </div>
+        <div class="thanks">Thank you for shopping!<br>Please come again 🙏</div>
+      `;
+    }
+
+    function renderReceiptQr(verifyUrl) {
+      const holder = document.getElementById('receiptQr');
+      if (!holder) return;
+      holder.innerHTML = '';
+
+      // Use qrcodejs if loaded
+      if (typeof QRCode !== 'undefined') {
+        // eslint-disable-next-line no-new
+        new QRCode(holder, {
+          text: verifyUrl,
+          width: 120,
+          height: 120,
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } else {
+        // Fallback: use an external image QR (works offline only if cached)
+        const img = document.createElement('img');
+        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + encodeURIComponent(verifyUrl);
+        img.alt = 'Receipt QR';
+        holder.appendChild(img);
+      }
+    }
+
+    // --- CONFIRM PAYMENT + AUTO PRINT ---
+    function confirmPayment() {
+      if (!pendingOrder) return;
+
+      const cash = parseCash(cashInput.value);
+      if (isNaN(cash) || cash + 1e-9 < pendingOrder.total) {
+        payError.textContent = 'Cash tendered is not enough.';
+        return;
+      }
+
+      const change = +(cash - pendingOrder.total).toFixed(2);
+
+      receiptCounter += 1;
+      localStorage.setItem('receiptCounter', String(receiptCounter));
+
+      const order = {
+        ...pendingOrder,
+        number: String(receiptCounter).padStart(5, '0'),
+        cash: +cash.toFixed(2),
+        change
+      };
+
+      // Build receipt
+      receiptEl.innerHTML = buildReceiptHTML(order);
+      const verifyUrl = `${STORE.verifyBase}/${encodeURIComponent(order.number)}`;
+      renderReceiptQr(verifyUrl);
+
+      // Reset cart & UI
+      cart = [];
+      renderCart();
+      closePaymentModal();
+      toast('✅ Sale complete — printing receipt…');
+
+      // Wait for QR + layout, then print
+      setTimeout(() => window.print(), 200);
+    }
+
+    confirmBtn.addEventListener('click', confirmPayment);
+
+    // Refocus search after print
+    window.addEventListener('afterprint', () => searchInput.focus());
+
+    // --- SEARCH ---
+    searchInput.addEventListener('input', (e) => renderProducts(e.target.value));
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = searchInput.value.trim();
+        if (findProduct(val)) {
+          addToCart(val);
+          searchInput.value = '';
+          renderProducts();
+        }
+      }
+    });
+
+    // --- BARCODE SCANNER ---
+    function openScanner() {
+      scannerModal.classList.add('active');
+      if (typeof Quagga === 'undefined') {
+        alert('Barcode scanner library failed to load.');
+        closeScanner();
+        return;
+      }
+      Quagga.init({
+        inputStream: {
+          name: 'Live', type: 'LiveStream',
+          target: document.querySelector('#scanner-viewport'),
+          constraints: { facingMode: 'environment' }
+        },
+        decoder: {
+          readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'code_128_reader', 'code_39_reader']
+        }
+      }, (err) => {
+        if (err) {
+          console.error(err);
+          alert('Could not start camera: ' + err.message);
+          closeScanner();
+          return;
+        }
+        Quagga.start();
+        quaggaRunning = true;
+      });
+    }
+
+    function closeScanner() {
+      scannerModal.classList.remove('active');
+      if (quaggaRunning) {
+        try { Quagga.stop(); } catch (_) {}
+        quaggaRunning = false;
+      }
+      const vp = document.querySelector('#scanner-viewport');
+      if (vp) vp.innerHTML = '';
+    }
+
+    if (typeof Quagga !== 'undefined') {
+      Quagga.onDetected((result) => {
+        const code = result && result.codeResult && result.codeResult.code;
+        if (!code) return;
+        if (findProduct(code)) {
+          addToCart(code);
+          closeScanner();
+        } else {
+          console.warn('Unknown barcode:', code);
+          toast('Barcode not found: ' + code, true);
+        }
+      });
+    }
+
+    $('scanBtn').addEventListener('click', openScanner);
+    $('closeScanner').addEventListener('click', closeScanner);
+    scannerModal.addEventListener('click', (e) => {
+      if (e.target === scannerModal) closeScanner();
+    });
+
+    // --- INIT ---
+    renderProducts();
+    renderCart();
+
+    // Wire the checkout button to open the payment modal (instead of printing directly)
+    checkoutBtn.addEventListener('click', openPaymentModal);
+  </script>
+</body>
+</html>
